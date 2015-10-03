@@ -3,6 +3,17 @@ vim-xmark
 
 Markdown preview on OS X. Uses AppleScript to resize the windows.
 
+# Features of this fork
+
+This fork adds extra configurability as suggested in [this issue](https://github.com/junegunn/vim-xmark/issues/10).
+
+Buffer local variables can set the CSS file, pandoc reader, and pandoc arguments for vim-xmark.
+    The default values are listed below:
+
+    let b:xmark_css = s:dir . '/css/github-markdown.css'
+    let b:xmark_pandoc_reader = 'markdown_github-hard_line_breaks'
+    let b:xmark_pandoc_args = ''
+
 Screenshot
 ----------
 

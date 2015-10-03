@@ -30,8 +30,12 @@ let s:cpo_save = &cpo
 set cpo&vim
 
 let s:dir = expand('<sfile>:p:h')
+let s:xmark_css = s:dir . '/css/github-markdown.css'
+let s:xmark_pandoc_reader = 'markdown_github-hard_line_breaks'
+let s:xmark_pandoc_args = ''
+
 let s:files = {
-\ 'css':    s:dir . '/css/github-markdown.css',
+\ 'css':    s:xmark_css,
 \ 'update': s:dir . '/applescript/update.scpt',
 \ 'close':  s:dir . '/applescript/close.scpt',
 \ 'access': s:dir . '/applescript/accessibility.scpt',
@@ -44,7 +48,7 @@ function! s:init_templates()
   if !exists('s:template')
     let s:template = {}
     let s:template.update = join(
-    \ [ 'pandoc -f markdown_github-hard_line_breaks -t html5 -s -M "title:{{ title }} / xmark" -H "{{ css }}" "{{ src }}" > "{{ out }}" &&',
+    \ [ 'pandoc -f {{ pandoc_reader }} -t html5 -s {{ pandoc_args }} -M "title:{{ title }} / xmark" -H "{{ css }}" "{{ src }}" > "{{ out }}" &&',
       \ 'osascript -e "$(cat << EOF',
       \ join(readfile(s:files.update), "\n"),
       \ 'EOF', ')"' ], "\n")
@@ -178,6 +182,16 @@ function! s:reload()
   if !empty(b:xmark_resize)
     silent! set nofullscreen
   endif
+  " buffer configuration for xmark
+  if exists('b:xmark_css')
+      let s:files.css = b:xmark_css
+  endif
+  if exists('b:xmark_pandoc_reader')
+      let s:xmark_pandoc_reader = b:xmark_pandoc_reader
+  endif
+  if exists('b:xmark_pandoc_args')
+      let s:xmark_pandoc_args = b:xmark_pandoc_args
+  endif
 
   let output = substitute(system(s:files.xsize), '\n$', '', '')
   if v:shell_error
@@ -193,17 +207,19 @@ function! s:reload()
   let [x, y, w, h] = split(output)[0:3]
   let path = s:tmp[bufnr('%')]
   let script = s:render('update', {
-        \ 'app':    s:app,
-        \ 'title':  expand('%:t'),
-        \ 'src':    expand('%:p'),
-        \ 'out':    path,
-        \ 'outurl': s:urlencode(path),
-        \ 'resize': b:xmark_resize,
-        \ 'x':      x,
-        \ 'y':      y,
-        \ 'w':      w,
-        \ 'h':      h,
-        \ 'css':    s:files.css })
+        \ 'app':           s:app,
+        \ 'title':         expand('%:t'),
+        \ 'src':           expand('%:p'),
+        \ 'out':           path,
+        \ 'outurl':        s:urlencode(path),
+        \ 'resize':        b:xmark_resize,
+        \ 'pandoc_reader': s:xmark_pandoc_reader,
+        \ 'pandoc_args':   s:xmark_pandoc_args,
+        \ 'x':             x,
+        \ 'y':             y,
+        \ 'w':             w,
+        \ 'h':             h,
+        \ 'css':           s:files.css })
   redraw
   echon 'Rendering the page'
   let output = system(script)
