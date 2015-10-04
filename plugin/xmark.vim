@@ -233,7 +233,7 @@ endfunction
 
 augroup _xmark_filetype_
   autocmd!
-  autocmd FileType mkd,markdown command! -buffer -bar -bang -nargs=? Xmark call s:xmark(<q-args>, <bang>0)
+  autocmd FileType mkd,markdown,mailmate command! -buffer -bar -bang -nargs=? Xmark call s:xmark(<q-args>, <bang>0)
 augroup END
 
 let &cpo = s:cpo_save
