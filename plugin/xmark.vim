@@ -313,7 +313,6 @@ function! s:reload(verbose)
   if has('job')
     call job_start('sh '.temps.script,
           \ {'exit_cb': {_job, exit -> s:exit_cb(exit, a:verbose, temps)}})
->>>>>>> 7e27f6fce7a249f0a4820fbc943191bbb7a1af10
   else
     let output = system('sh '.temps.script)
     call s:exit_cb(v:shell_error, 1, temps)
