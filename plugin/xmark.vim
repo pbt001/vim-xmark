@@ -48,7 +48,7 @@ function! s:init_templates()
   if !exists('s:template')
     let s:template = {}
     let s:template.update = join(
-    \ [ 'pandoc -f {{ pandoc_reader }} -t html5 -s {{ pandoc_args }} -M "title:{{ title }} / xmark" -H "{{ css }}" "{{ src }}" > "{{ out }}" &&',
+    \ [ 'pandoc -f {{ pandoc_reader }} -t html5 -s {{ pandoc_args }} -H "{{ css }}" "{{ src }}" > "{{ out }}" &&',
       \ 'osascript -e "$(cat << EOF',
       \ join(readfile(s:files.update), "\n"),
       \ 'EOF', ')"' ], "\n")
