@@ -14,6 +14,8 @@ Buffer local variables can set the CSS file, pandoc reader, and pandoc arguments
     let b:xmark_pandoc_reader = 'markdown_github-hard_line_breaks'
     let b:xmark_pandoc_args = ''
 
+Vim 8 is required for asynchronous rendering.
+
 Screenshot
 ----------
 

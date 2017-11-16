@@ -37,12 +37,20 @@ let s:xmark_pandoc_args = ''
 let s:files = {
 \ 'css':    s:xmark_css,
 \ 'update': s:dir . '/applescript/update.scpt',
+\ 'resize': s:dir . '/applescript/resize.scpt',
 \ 'close':  s:dir . '/applescript/close.scpt',
 \ 'access': s:dir . '/applescript/accessibility.scpt',
 \ 'xsize':  s:dir . '/ext/xsize'
 \ }
 let s:app = 'Google Chrome'
 let s:tmp = {}
+
+function! s:osawrap(...)
+  let lines = ['osascript -e "$(cat << EOF']
+  call extend(lines, map(copy(a:000), 'join(readfile(v:val), "\n")'))
+  call extend(lines, ['EOF', ')"'])
+  return join(lines, "\n")
+endfunction
 
 function! s:init_templates()
   if !exists('s:template')
@@ -56,6 +64,11 @@ function! s:init_templates()
     \ [ 'osascript -e "$(cat << EOF',
       \ join(readfile(s:files.close), "\n"),
       \ 'EOF', ')"' ], "\n")
+    let pandoc_prefix = 'pandoc -f markdown_github-hard_line_breaks -t html5 -s -M "title:{{ title }} / xmark" -H "{{ css }}" "{{ src }}" > "{{ out }}" &&'
+    let s:template = {
+        \ 'refresh': pandoc_prefix . s:osawrap(s:files.update, s:files.resize),
+        \ 'update':  pandoc_prefix . s:osawrap(s:files.update),
+        \ 'close':   s:osawrap(s:files.close) }
   endif
 endfunction
 
@@ -163,11 +176,23 @@ function! s:xmark(resize, bang)
     " BufUnload is triggered twice for some reason so we simply put silent!
     autocmd BufUnload    <buffer> silent! call delete(remove(s:tmp, expand('<abuf>')))
           \| silent! execute 'autocmd!' s:grp(expand('<abuf>'))
-    autocmd BufWritePost <buffer> call s:reload()
+    autocmd BufWritePost <buffer> call s:queue(0, 1)
+    if has('job') && has('timers')
+      autocmd TextChanged,TextChangedI <buffer> call s:queue(250, 0)
+    endif
   augroup END
   let b:xmark_resize = a:resize
 
-  call s:reload()
+  if s:update_screen_size()
+    call s:reload(1)
+  endif
+endfunction
+
+function! s:queue(timeout, verbose)
+  if exists('s:timer')
+    call timer_stop(s:timer)
+  endif
+  let s:timer = timer_start(a:timeout, {_ -> s:reload(a:verbose)})
 endfunction
 
 function! s:render(template, vars)
@@ -178,10 +203,27 @@ function! s:render(template, vars)
   return output
 endfunction
 
-function! s:reload()
-  if !empty(b:xmark_resize)
-    silent! set nofullscreen
+function! s:exit_cb(exit, verbose, temps)
+  if a:verbose
+    redraw
   endif
+
+  if a:exit
+    if a:verbose
+      call s:warn(printf('Failed to reload the page (exit status: %d / script: %s)',
+            \ a:exit, a:temps.script))
+    endif
+  else
+    if a:verbose
+      echo 'Reloaded the page'
+    endif
+    for temp in values(a:temps)
+      if filereadable(temp)
+        call delete(temp)
+      endif
+    endfor
+  endif
+
   " buffer configuration for xmark
   if exists('b:xmark_css')
       let s:files.css = b:xmark_css
@@ -193,18 +235,33 @@ function! s:reload()
       let s:xmark_pandoc_args = b:xmark_pandoc_args
   endif
 
+endfunction
+
+function! s:update_screen_size()
   let output = substitute(system(s:files.xsize), '\n$', '', '')
   if v:shell_error
+    call s:warn(output)
     if stridx(output, '(-1719)') >= 0
-      call s:warn(output)
       call system('osascript '.s:files.access)
-    else
-      echoerr output
     endif
-    return
+    unlet! s:screen_size
+    return 0
+  endif
+  let s:screen_size = split(output)
+  return 1
+endfunction
+
+function! s:reload(verbose)
+  unlet! s:timer
+
+  if !empty(b:xmark_resize)
+    silent! set nofullscreen
   endif
 
-  let [x, y, w, h] = split(output)[0:3]
+  if !exists('s:screen_size') && !s:update_screen_size()
+    return
+  endif
+  let [x, y, w, h] = s:screen_size
   let path = s:tmp[bufnr('%')]
   let script = s:render('update', {
         \ 'app':           s:app,
@@ -226,8 +283,40 @@ function! s:reload()
   redraw
   if v:shell_error
     echo 'Failed to reload the page: ' . output
+  let temps = { 'script': tempname() }
+  let src = expand('%:p')
+  if &modified
+    let temps.src = tempname()
+    call writefile(getline(1, '$'), temps.src)
+    let src = temps.src
+  endif
+  let script = s:render(a:verbose ? 'refresh' : 'update', {
+        \ 'app':    s:app,
+        \ 'title':  expand('%:t'),
+        \ 'src':    src,
+        \ 'out':    path,
+        \ 'outurl': s:urlencode(path),
+        \ 'resize': b:xmark_resize,
+        \ 'bg':     a:verbose ? '' : '-- ',
+        \ 'x':      x,
+        \ 'y':      y,
+        \ 'w':      w,
+        \ 'h':      h,
+        \ 'css':    s:files.css })
+
+  if a:verbose
+    redraw
+    echon 'Rendering the page'
+  endif
+
+  call writefile(split(script, "\n"), temps.script)
+  if has('job')
+    call job_start('sh '.temps.script,
+          \ {'exit_cb': {_job, exit -> s:exit_cb(exit, a:verbose, temps)}})
+>>>>>>> 7e27f6fce7a249f0a4820fbc943191bbb7a1af10
   else
-    echo 'Reloaded the page'
+    let output = system('sh '.temps.script)
+    call s:exit_cb(v:shell_error, 1, temps)
   endif
 endfunction
 
